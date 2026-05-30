@@ -91,12 +91,12 @@ function getContentEditableBoundaryOffset(
   }
 
   if (!root.contains(container)) {
-    // 处理选区边界在输入框外部的情况（如 Ctrl+A）
+    // 处理输入框外的选区边界（如 Ctrl+A）
     const position = root.compareDocumentPosition(container)
     if (position & Node.DOCUMENT_POSITION_PRECEDING) return 0
     if (position & Node.DOCUMENT_POSITION_FOLLOWING) return root.textContent?.length ?? 0
 
-    // 如果是父容器，根据偏移量判断是在输入框前还是后
+    // 根据父容器偏移量判断在输入框前后
     if (container.contains(root)) {
       const children = Array.from(container.childNodes)
       const rootIndex = children.indexOf(root as any)
@@ -252,7 +252,7 @@ function setContentEditableCursor(el: HTMLElement, offset: number) {
     }
     remaining -= node.length
   }
-  // 如果偏移超出，放到末尾
+  // 偏移超出则放至末尾
   if (node) {
     const range = document.createRange()
     range.setStart(node, node.length)
@@ -915,7 +915,8 @@ export default function InputBar() {
 
   const insertPromptTextAtSelection = useCallback((text: string) => {
     const el = textareaRef.current
-    if (el) {
+    // 换行文本改用 state 渲染以避免 execCommand 插入 <br>/<div> 导致高度和换行异常
+    if (el && !text.includes('\n')) {
       el.focus()
       if (document.execCommand('insertText', false, text)) {
         syncPromptFromContentEditable()
@@ -1419,14 +1420,14 @@ export default function InputBar() {
     const el = textareaRef.current
     if (!el) return
 
-    // 计算图片区域和其他固定元素占用的高度
+    // 计算图片区域等固定高度
     const imagesHeight = imagesRef.current?.offsetHeight ?? 0
     const fixedOverhead = imagesHeight + 140
 
-    // textarea 最大高度 = 页面 40% 减去固定开销，至少保留 80px
+    // 最大高度限制在页面 40% 减固定开销，不小于 80px
     const maxH = Math.max(window.innerHeight * 0.4 - fixedOverhead, 80)
 
-    // 1. 关闭过渡动画，设高度为 0 以获取真实的文本内容高度
+    // 1. 清零高度以获取真实文本高度
     el.style.transition = 'none'
     el.style.height = '0'
     el.style.overflowY = 'hidden'
@@ -1439,14 +1440,14 @@ export default function InputBar() {
     const desired = Math.max(scrollH, minH)
     const targetH = desired > maxH ? maxH : desired
 
-    // 判断是否只有一行
+    // 判断是否为单行
     setIsSingleLine(desired <= minH)
 
-    // 2. 将高度设回上一次的实际高度，强制重绘，准备开始动画
+    // 2. 回设旧高度并重绘以准备触发动画
     el.style.height = prevHeightRef.current + 'px'
     void el.offsetHeight
 
-    // 3. 恢复平滑过渡，并设置目标高度
+    // 3. 恢复平滑过渡并设置新目标高度
     el.style.transition = 'height 150ms ease, border-color 200ms, box-shadow 200ms'
     el.style.height = targetH + 'px'
     el.style.overflowY = desired > maxH ? 'auto' : 'hidden'
@@ -1454,11 +1455,11 @@ export default function InputBar() {
     prevHeightRef.current = targetH
   }, [])
 
-  // 将 prompt 同步渲染到 contentEditable（含胶囊 tag）
+  // 同步 prompt 至 contentEditable
   useEffect(() => {
     const el = textareaRef.current
     if (!el) return
-    // 用户正在输入时不重新渲染 DOM，避免光标跳动
+    // 输入时不重复渲染以防光标跳动
     if (isUserInputRef.current) {
       isUserInputRef.current = false
       return
@@ -1476,11 +1477,27 @@ export default function InputBar() {
     }
   }, [prompt, inputImages])
 
+  // 补 <br> 哨兵避免 pre-wrap 吃掉行尾 \n，同时不影响纯文本读取。
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    const last = el.lastChild
+    const hasSentinel = last instanceof HTMLBRElement && last.dataset.sentinelBr === 'true'
+    const needSentinel = prompt.endsWith('\n')
+    if (needSentinel && !hasSentinel) {
+      const br = document.createElement('br')
+      br.dataset.sentinelBr = 'true'
+      el.appendChild(br)
+    } else if (!needSentinel && hasSentinel) {
+      last.remove()
+    }
+  }, [prompt, inputImages])
+
   useEffect(() => {
     adjustTextareaHeight()
-  }, [prompt, inputImages, adjustTextareaHeight])
+  }, [prompt, inputImages, adjustTextareaHeight, isMobile, mobileCollapsed])
 
-  // 监听 selectionchange 以在光标移动时更新位置（contentEditable 的 onSelect 不可靠）
+  // 监听 selectionchange 更新光标位置（onSelect 在 contentEditable 下不可靠）
   useEffect(() => {
     const handleSelectionChange = () => {
       const el = textareaRef.current
@@ -1511,16 +1528,16 @@ export default function InputBar() {
     return () => document.removeEventListener('selectionchange', handleSelectionChange)
   }, [])
 
-  // 点击屏幕外部、空白处、卡片间隙等，使输入栏相关输入框失焦
+  // 点击外部时使 input 栏失焦
   useEffect(() => {
     const handleGlobalMouseDown = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null
       if (!target) return
 
       if (document.activeElement instanceof HTMLElement) {
-        // 如果当前聚焦的元素属于输入栏（主输入框、数量或压缩率输入框等）
+        // 若当前聚焦在输入栏内
         if (document.activeElement.closest('[data-input-bar]')) {
-          // 如果点击的区域不在输入栏内部
+          // 若点击在输入栏外部
           if (!target.closest('[data-input-bar]')) {
             document.activeElement.blur()
           }
@@ -2371,7 +2388,9 @@ export default function InputBar() {
               className="col-start-1 row-start-1 min-h-[42px] w-full overflow-hidden ios-rounded-scroll-fix whitespace-pre-wrap break-words rounded-2xl border border-gray-200/60 bg-white/50 pl-4 pr-10 py-3 text-sm leading-relaxed shadow-sm outline-none transition-[border-color,box-shadow] duration-200 focus:ring-1 focus:ring-blue-300/40 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-100 dark:focus:ring-blue-500/30"
             />
             {prompt.length === 0 && (
-              <div className="prompt-placeholder col-start-1 row-start-1 pointer-events-none pl-4 pr-10 py-3 text-sm leading-relaxed text-gray-400 dark:text-gray-500">
+              <div className={`prompt-placeholder col-start-1 row-start-1 pointer-events-none pl-4 pr-10 py-3 text-sm leading-relaxed text-gray-400 dark:text-gray-500${
+                isMobile && mobileCollapsed ? ' truncate' : ''
+              }`}>
                 {promptPlaceholder}
               </div>
             )}
@@ -2463,7 +2482,6 @@ export default function InputBar() {
                   onMouseEnter={() => setAttachHover(true)}
                   onMouseLeave={() => setAttachHover(false)}
                 >
-                  <ButtonTooltip visible={attachHover} text={uploadImageTooltipText} />
                   <button
                     onClick={() => {
                       if (!atImageLimit) {
