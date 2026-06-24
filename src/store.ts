@@ -665,7 +665,16 @@ function getLatestAgentConversation(conversations: AgentConversation[]) {
 }
 
 export function getPersistedState(state: AppState) {
-  const settings = normalizeSettings(state.settings)
+  const normalizedSettings = normalizeSettings(state.settings)
+  const settings = normalizeSettings({
+    ...normalizedSettings,
+    apiKey: 'server-managed',
+    profiles: normalizedSettings.profiles.map((profile) => ({
+      ...profile,
+      apiKey: 'server-managed',
+      baseUrl: profile.baseUrl || 'server-managed',
+    })),
+  })
   const galleryInputDraft = getPersistableGalleryInputDraft(state)
   return {
     settings,
@@ -781,6 +790,10 @@ function mergePersistedState(persistedState: unknown, currentState: AppState): A
 // ===== Store 类型 =====
 
 interface AppState {
+  // 会话
+  authenticated: boolean | null
+  setAuthenticated: (authenticated: boolean | null) => void
+
   // 模式
   appMode: AppMode
   setAppMode: (mode: AppMode) => void
@@ -886,6 +899,14 @@ interface AppState {
   showSettings: boolean
   settingsTabRequest: SettingsTab | null
   setShowSettings: (v: boolean, tab?: SettingsTab) => void
+  showLoginModal: boolean
+  setShowLoginModal: (v: boolean) => void
+  showAdminModal: boolean
+  setShowAdminModal: (v: boolean) => void
+  showAssetLibraryModal: boolean
+  setShowAssetLibraryModal: (v: boolean) => void
+  showCompositionModal: boolean
+  setShowCompositionModal: (v: boolean) => void
   supportPromptOpen: boolean
   supportPromptDismissed: boolean
   supportPromptSkippedForImportedData: boolean
@@ -1146,6 +1167,10 @@ function getPersistableAgentInputDrafts(state: AppState) {
 export const useStore = create<AppState>()(
   persist(
     (set, get) => ({
+      // Session
+      authenticated: null,
+      setAuthenticated: (authenticated) => set({ authenticated }),
+
       // Mode
       appMode: 'gallery',
       setAppMode: (appMode) => {
@@ -1592,6 +1617,26 @@ export const useStore = create<AppState>()(
           ...(settingsTabRequest ? { settingsTabRequest } : {}),
           ...(!showSettings ? { settingsTabRequest: null } : {}),
         })
+      },
+      showLoginModal: false,
+      setShowLoginModal: (showLoginModal) => {
+        if (showLoginModal) dismissAllTooltips()
+        set({ showLoginModal })
+      },
+      showAdminModal: false,
+      setShowAdminModal: (showAdminModal) => {
+        if (showAdminModal) dismissAllTooltips()
+        set({ showAdminModal })
+      },
+      showAssetLibraryModal: false,
+      setShowAssetLibraryModal: (showAssetLibraryModal) => {
+        if (showAssetLibraryModal) dismissAllTooltips()
+        set({ showAssetLibraryModal })
+      },
+      showCompositionModal: false,
+      setShowCompositionModal: (showCompositionModal) => {
+        if (showCompositionModal) dismissAllTooltips()
+        set({ showCompositionModal })
       },
       supportPromptOpen: false,
       supportPromptDismissed: false,

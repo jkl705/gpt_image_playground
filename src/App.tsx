@@ -19,6 +19,10 @@ import Toast from './components/Toast'
 import MaskEditorModal from './components/MaskEditorModal'
 import ImageContextMenu from './components/ImageContextMenu'
 import SupportPromptModal from './components/SupportPromptModal'
+import LoginModal from './components/LoginModal'
+import AdminModal from './components/AdminModal'
+import AssetLibraryModal from './components/AssetLibraryModal'
+import CompositionEditorModal from './components/CompositionEditorModal'
 import { FavoriteCollectionPickerModal, FavoriteCollectionsView, ManageCollectionsModal } from './components/FavoriteCollections'
 import { useGlobalClickSuppression } from './lib/clickSuppression'
 
@@ -131,6 +135,10 @@ export default function App() {
       <Toast />
       <MaskEditorModal />
       <ImageContextMenu />
+      <LoginModal />
+      <AdminModal />
+      <AssetLibraryModal />
+      <CompositionEditorModal />
     </>
   )
 }

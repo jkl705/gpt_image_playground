@@ -100,6 +100,33 @@ function createHeaders(profile: ApiProfile): Record<string, string> {
   }
 }
 
+async function fetchServerAgentResponses(body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
+  return fetch('/api/agent/responses', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    cache: 'no-store',
+    body: JSON.stringify({ body }),
+    signal,
+  })
+}
+
+function shouldUseServerAgentApi(profile: ApiProfile) {
+  return profile.apiKey === 'server-managed' || profile.baseUrl === 'server-managed'
+}
+
+async function fetchAgentResponses(profile: ApiProfile, body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
+  if (shouldUseServerAgentApi(profile)) return fetchServerAgentResponses(body, signal)
+  const proxyConfig = readClientDevProxyConfig()
+  const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
+  return fetch(buildApiUrl(profile.baseUrl, 'responses', proxyConfig, useApiProxy), {
+    method: 'POST',
+    headers: createHeaders(profile),
+    cache: 'no-store',
+    body: JSON.stringify(body),
+    signal,
+  })
+}
+
 function createImageTool(params: TaskParams, profile: ApiProfile, maskDataUrl?: string): Record<string, unknown> {
   const tool: Record<string, unknown> = {
     type: 'image_generation',
@@ -703,8 +730,6 @@ export async function callAgentResponsesApi(opts: {
 }): Promise<AgentApiResult> {
   const { settings, profile, params, input, maskDataUrl, signal, onTextDelta, onOutputItems, onImageToolStarted, onImagePartialImage, onImageToolCompleted, onImageToolFailed } = opts
   const mime = MIME_MAP[params.output_format] || 'image/png'
-  const proxyConfig = readClientDevProxyConfig()
-  const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), profile.timeout * 1000)
   const abortFromCaller = () => controller.abort()
@@ -722,13 +747,7 @@ export async function callAgentResponsesApi(opts: {
       body.stream = true
     }
 
-    const response = await fetch(buildApiUrl(profile.baseUrl, 'responses', proxyConfig, useApiProxy), {
-      method: 'POST',
-      headers: createHeaders(profile),
-      cache: 'no-store',
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    })
+    const response = await fetchAgentResponses(profile, body, controller.signal)
 
     if (!response.ok) {
       const errorMessage = await getApiErrorMessage(response)
@@ -762,8 +781,6 @@ export async function callAgentConversationTitleApi(opts: {
   signal?: AbortSignal
 }): Promise<string> {
   const { settings, profile, prompt, imageDataUrls, signal } = opts
-  const proxyConfig = readClientDevProxyConfig()
-  const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), profile.timeout * 1000)
   const abortFromCaller = () => controller.abort()
@@ -778,18 +795,12 @@ export async function callAgentConversationTitleApi(opts: {
       content.push({ type: 'input_image', image_url: dataUrl })
     }
 
-    const response = await fetch(buildApiUrl(profile.baseUrl, 'responses', proxyConfig, useApiProxy), {
-      method: 'POST',
-      headers: createHeaders(profile),
-      cache: 'no-store',
-      body: JSON.stringify({
-        model: profile.model || settings.model,
-        instructions: AGENT_TITLE_INSTRUCTIONS,
-        input: [{ role: 'user', content }],
-        max_output_tokens: 32,
-      }),
-      signal: controller.signal,
-    })
+    const response = await fetchAgentResponses(profile, {
+      model: profile.model || settings.model,
+      instructions: AGENT_TITLE_INSTRUCTIONS,
+      input: [{ role: 'user', content }],
+      max_output_tokens: 32,
+    }, controller.signal)
 
     if (!response.ok) {
       throw new Error(await getApiErrorMessage(response))
@@ -837,8 +848,6 @@ export async function callBatchImageSingle(opts: {
 }): Promise<BatchImageCallResult> {
   const { profile, params, batchItemId, prompt, referenceImageDataUrls, referenceIds, allowPromptRewrite, signal, onImageToolStarted, onPartialImage, onImageToolCompleted } = opts
   const mime = MIME_MAP[params.output_format] || 'image/png'
-  const proxyConfig = readClientDevProxyConfig()
-  const useApiProxy = shouldUseApiProxy(profile.apiProxy, proxyConfig)
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), profile.timeout * 1000)
   const abortFromCaller = () => controller.abort()
@@ -893,13 +902,7 @@ export async function callBatchImageSingle(opts: {
       body.stream = true
     }
 
-    const response = await fetch(buildApiUrl(profile.baseUrl, 'responses', proxyConfig, useApiProxy), {
-      method: 'POST',
-      headers: createHeaders(profile),
-      cache: 'no-store',
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    })
+    const response = await fetchAgentResponses(profile, body, controller.signal)
 
     if (!response.ok) {
       const errorMsg = await getApiErrorMessage(response)

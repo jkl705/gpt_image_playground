@@ -7,7 +7,7 @@ import ViewportTooltip from './ViewportTooltip'
 import HelpModal from './HelpModal'
 import HistoryModal from './HistoryModal'
 import { useFavoriteCollectionTitle } from './FavoriteCollections'
-import { EditIcon, HelpCircleIcon, HistoryIcon, InstallIcon, SettingsIcon } from './icons'
+import { EditIcon, HelpCircleIcon, HistoryIcon, ImageLibraryIcon, InstallIcon, SettingsIcon, ShieldIcon } from './icons'
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>
@@ -23,6 +23,8 @@ export default function Header() {
   const appMode = useStore((s) => s.appMode)
   const setAppMode = useStore((s) => s.setAppMode)
   const setShowSettings = useStore((s) => s.setShowSettings)
+  const setShowAdminModal = useStore((s) => s.setShowAdminModal)
+  const setShowAssetLibraryModal = useStore((s) => s.setShowAssetLibraryModal)
   const setConfirmDialog = useStore((s) => s.setConfirmDialog)
   const agentMobileHeaderVisible = useStore((s) => s.agentMobileHeaderVisible)
   const agentConversations = useStore((s) => s.agentConversations)
@@ -84,6 +86,8 @@ export default function Header() {
   }, [appMode, agentMobileHeaderVisible])
 
   const installTooltip = useTooltip()
+  const assetTooltip = useTooltip()
+  const adminTooltip = useTooltip()
   const helpTooltip = useTooltip()
   const settingsTooltip = useTooltip()
 
@@ -272,6 +276,42 @@ export default function Header() {
                 </ViewportTooltip>
               </div>
             )}
+            <div
+              className="relative"
+              {...assetTooltip.handlers}
+            >
+              <button
+                onClick={() => {
+                  dismissAllTooltips()
+                  setShowAssetLibraryModal(true)
+                }}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
+                aria-label="素材库"
+              >
+                <ImageLibraryIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              </button>
+              <ViewportTooltip visible={assetTooltip.visible} className="whitespace-nowrap">
+                素材库
+              </ViewportTooltip>
+            </div>
+            <div
+              className="relative"
+              {...adminTooltip.handlers}
+            >
+              <button
+                onClick={() => {
+                  dismissAllTooltips()
+                  setShowAdminModal(true)
+                }}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
+                aria-label="管理后台"
+              >
+                <ShieldIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              </button>
+              <ViewportTooltip visible={adminTooltip.visible} className="whitespace-nowrap">
+                管理后台
+              </ViewportTooltip>
+            </div>
             <div
               className="relative"
               {...helpTooltip.handlers}
